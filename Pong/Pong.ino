@@ -17,11 +17,23 @@
 #include "Gamer_SSD1306.h"
 #include "fablablogo.h"
 
+// define this, if your buttons get 'LOW' when you press them
+#define BUTTON_ACTIVE_LOW
+
 //Define Pins
 #define BEEPER 6
 #define BEEPER_GND 7
 #define CONTROL_A A2
 #define CONTROL_B A3
+
+
+// Note that according to https://www.arduino.cc/en/Reference/attachInterrupt
+// only buttons A and B can have interrupts
+#define PIN_BUTTON_A 2
+#define PIN_BUTTON_B 3
+#define PIN_BUTTON_C 4
+#define PIN_BUTTON_D 5
+const int debounceDelay = 60;
 
 #define OLED_CLK   13
 #define OLED_MOSI  11  // Hardware SPI port
@@ -47,6 +59,24 @@
 //Define Variables
 Gamer_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 
+const int UNDEF_STATE = 0;
+const int MENU_STATE = 1;
+const int PLAY_STATE = 2;
+
+int game_state = UNDEF_STATE;
+
+int settings = 0;
+int menu_cursor = 0;
+const char* settings_text[] = {"Sound"};
+const int SETTING_SOUND = 0;
+const int n_settings = 1;
+
+// this is how to have more menu items:
+/* const char* settings_text[] = {"Sound","Beschleunigung","Paddel schrumpft"}; */
+/* const int SETTING_ACCEL = 1; */
+/* const int SETTING_PADDLE = 2; */
+/* const int n_settings = 3; */
+
 int paddleLocationA = 0;
 int paddleLocationB = 0;
 
@@ -61,8 +91,6 @@ int lastPaddleLocationB = 0;
 int scoreA = 0;
 int scoreB = 0;
 
-
-//Setup 
 void setup() 
 {
   pinMode(BEEPER_GND, OUTPUT);
@@ -79,7 +107,18 @@ void setup()
   
   display.setTextColor(WHITE);
   display.setTextSize(FONT_SIZE);
-  display.clearDisplay(); 
+  display.clearDisplay();
+
+  game_state = MENU_STATE;
+
+#ifdef BUTTON_ACTIVE_LOW
+  attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_A), menu_cursor_down, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_B), menu_toggle, FALLING);
+#else
+  attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_A), menu_cursor_down, RISING);
+  attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_B), menu_toggle, RISING);
+#endif
+
 }
 
 //Splash Screen
@@ -106,8 +145,78 @@ void splash()
   soundStart();
 }
 
-//Loop
+/*
+  display a menu, to set handicap etc.
+*/
+void settings_menu()
+{
+  int line_height = 1 + 7 + 1;
+  display.clearDisplay(); 
+  display.setTextColor(WHITE);
+  centerPrint("EINSTELLUNGEN",1,1);
+
+  char onoff_char[] = "x";
+  for(int i = 0; i < n_settings; i++) {
+    display.setTextSize(1);
+    //display.setCursor(1,y);
+    if(settings & ( 1 << i )) {
+      if(i == menu_cursor){
+	onoff_char[0] = 'X';
+      }else{
+	onoff_char[0] = 'x';
+      }
+    }else{
+      if(i == menu_cursor){
+	onoff_char[0] = 'O';
+      } else {
+	onoff_char[0] = 'o';
+      }
+    }
+    lalignPrint(onoff_char,1,(1+i)*line_height);
+    lalignPrint(settings_text[i],9,(1+i)*line_height);
+  }
+
+  if(digitalRead(PIN_BUTTON_D) == LOW)
+    // leave menu and start playing
+    game_state = PLAY_STATE;
+
+  display.display();
+}
+
+void menu_cursor_down() {
+  //If an object that has static storage duration is not initialized explicitly, then:
+  // if it has arithmetic type, it is initialized to (positive or unsigned) zero;
+  static int last_time_pressed;
+  
+  if(game_state = MENU_STATE && millis() - last_time_pressed > debounceDelay) {
+    menu_cursor = (menu_cursor + 1) % n_settings;
+    last_time_pressed = millis();
+  }
+}
+
+void menu_toggle() {
+  // If an object that has static storage duration is not initialized
+  // explicitly, then: if it has arithmetic type, it is initialized to
+  // (positive or unsigned) zero
+  static int last_time_pressed;
+  
+  if(game_state = MENU_STATE && millis() - last_time_pressed > debounceDelay) {
+    // toggle the setting the menu_cursor points to
+    settings = settings ^ (1 << menu_cursor);
+    last_time_pressed = millis();
+  }
+}
+
 void loop()
+{
+  if(game_state == MENU_STATE) {
+    settings_menu();
+  } else if(game_state == PLAY_STATE) {
+    play_loop();
+  }
+}
+
+void play_loop()
 {
   calculateMovement();
   draw();
@@ -249,12 +358,14 @@ void soundStart()
 
 void soundBounce() 
 {
-  tone(BEEPER, 500, 50);
+  if(settings & SETTING_SOUND)
+    tone(BEEPER, 500, 50);
 }
 
 void soundPoint() 
 {
-  tone(BEEPER, 150, 150);
+  if(settings & SETTING_SOUND)
+    tone(BEEPER, 150, 150);
 }
 
 void centerPrint(const char *text, int y, int size)
@@ -264,3 +375,9 @@ void centerPrint(const char *text, int y, int size)
   display.print(text);
 }
 
+void lalignPrint(const char *text, int x, int y)
+{
+  display.setTextSize(1);
+  display.setCursor(x,y);
+  display.print(text);
+}

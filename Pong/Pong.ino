@@ -319,30 +319,20 @@ void draw()
   display.display();
 } 
 
+/*
+
+ */
 void addEffect(int paddleSpeed)
 {
-  float oldBallSpeedY = ballSpeedY;
-
   //add effect to ball when paddle is moving while bouncing.
   //for every pixel of paddle movement, add or substact EFFECT_SPEED to ballspeed.
-  for (int effect = 0; effect < abs(paddleSpeed); effect++) {
-    if (paddleSpeed > 0) {
-      ballSpeedY += EFFECT_SPEED;
-    } else {
-      ballSpeedY -= EFFECT_SPEED;
-    }
-  }
+  ballSpeedY += floor(paddleSpeed)*EFFECT_SPEED;
 
   //limit to minimum speed
-  if (ballSpeedY < MIN_Y_SPEED && ballSpeedY > -MIN_Y_SPEED) {
-    if (ballSpeedY > 0) ballSpeedY = MIN_Y_SPEED;
-    if (ballSpeedY < 0) ballSpeedY = -MIN_Y_SPEED;
-    if (ballSpeedY == 0) ballSpeedY = oldBallSpeedY;
-  }
+  ballSpeedY = signum(ballSpeedY) * max(abs(ballSpeedY),MIN_Y_SPEED);
 
   //limit to maximum speed
-  if (ballSpeedY > MAX_Y_SPEED) ballSpeedY = MAX_Y_SPEED;
-  if (ballSpeedY < -MAX_Y_SPEED) ballSpeedY = -MAX_Y_SPEED;
+  ballSpeedY = signum(ballSpeedY) * min(abs(ballSpeedY),MAX_Y_SPEED);
 }
 
 void soundStart() 
@@ -354,6 +344,15 @@ void soundStart()
   tone(BEEPER, 1000);
   delay(100);
   noTone(BEEPER);
+}
+
+/*
+this returns -1, 0 or +1, depending on the sign of value
+ */
+int signum(float value)
+{
+  // a branchless way to express signum
+  return (0 < value) - (value < 0);
 }
 
 void soundBounce() 

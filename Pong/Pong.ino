@@ -303,17 +303,14 @@ void draw()
 
   //print scores
 
-  //backwards indent score A. This is dirty, but it works ... ;)
-  int scoreAWidth = 5 * FONT_SIZE;
-  if (scoreA > 9) scoreAWidth += 6 * FONT_SIZE;
-  if (scoreA > 99) scoreAWidth += 6 * FONT_SIZE;
-  if (scoreA > 999) scoreAWidth += 6 * FONT_SIZE;
-  if (scoreA > 9999) scoreAWidth += 6 * FONT_SIZE;
+  //backwards indent score A
+  int scoreAWidth = 6 * FONT_SIZE * ceil(log10(scoreA));
 
   display.setCursor(SCREEN_WIDTH/2 - SCORE_PADDING - scoreAWidth,0);
   display.print(scoreA);
 
-  display.setCursor(SCREEN_WIDTH/2 + SCORE_PADDING+1,0); //+1 because of dotted line.
+  //+1 because of dotted line
+  display.setCursor(SCREEN_WIDTH/2 + SCORE_PADDING+1,0);
   display.print(scoreB);
   
   display.display();

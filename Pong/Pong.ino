@@ -11,8 +11,6 @@
   in any redistribution.
  ****************************************************/
 
-#include <SPI.h>
-#include <Wire.h>
 #include <Adafruit_GFX.h>
 #include "Gamer_SSD1306.h"
 #include "fablablogo.h"

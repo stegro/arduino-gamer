@@ -15,6 +15,8 @@
 #include "Gamer_SSD1306.h"
 #include "fablablogo.h"
 
+//#define SHOW_DEBUG_DATA
+
 // define this, if your buttons get 'LOW' when you press them
 #define BUTTON_ACTIVE_LOW
 
@@ -65,22 +67,24 @@ int game_state = UNDEF_STATE;
 
 int settings = 0;
 int menu_cursor = 0;
-const char* settings_text[] = {"Sound"};
-const int SETTING_SOUND = 0;
-const int n_settings = 1;
-
-// this is how to have more menu items:
-/* const char* settings_text[] = {"Sound","Beschleunigung","Paddel schrumpft"}; */
-/* const int SETTING_ACCEL = 1; */
-/* const int SETTING_PADDLE = 2; */
-/* const int n_settings = 3; */
+const char* settings_text[] = {"Sound","Spiel beschleunigt"};
+const int SETTING_SOUND = 1<<0;
+const int SETTING_ACCEL = 1<<1;
+const int n_settings = 2;
 
 int paddleLocationA = 0;
 int paddleLocationB = 0;
 
 float ballX = SCREEN_WIDTH/2;
 float ballY = SCREEN_HEIGHT/2;
-float ballSpeedX = 2;
+// if SETTING_ACCEL is active, these parameters determine game acceleration 
+float ballSpeedXDelta = 0.1;
+float ballSpeedXStartWithAccel = 1.2;
+
+float ballSpeedXStartWithoutAccel = 2;
+
+float ballSpeedXSign = 1;
+float ballSpeedX = ballSpeedXStartWithoutAccel;
 float ballSpeedY = 1;
 
 int lastPaddleLocationA = 0;
@@ -88,6 +92,7 @@ int lastPaddleLocationB = 0;
 
 int scoreA = 0;
 int scoreB = 0;
+int hitCounter = 0;
 
 void setup() 
 {
@@ -140,7 +145,7 @@ void splash()
     // both potmeters is smaler than 5
   }
 
-  soundStart();
+  soundArpeggioUp();
 }
 
 /*
@@ -174,9 +179,17 @@ void settings_menu()
     lalignPrint(settings_text[i],9,(1+i)*line_height);
   }
 
-  if(digitalRead(PIN_BUTTON_D) == LOW)
+  if(digitalRead(PIN_BUTTON_D) == LOW){
+    // do some final initialisation according to chosen settings
+    if(settings & SETTING_ACCEL) { 
+      ballSpeedX = ballSpeedXStartWithAccel;
+    } else {
+      ballSpeedX = ballSpeedXStartWithoutAccel;
+    }
+    
     // leave menu and start playing
     game_state = PLAY_STATE;
+  }
 
   display.display();
 }
@@ -241,44 +254,52 @@ void calculateMovement()
   }
 
   //bounce from paddle A
-  if (ballX >= PADDLE_PADDING && ballX <= PADDLE_PADDING+BALL_SIZE && ballSpeedX < 0) {
+  if (ballX >= PADDLE_PADDING && ballX <= PADDLE_PADDING+BALL_SIZE && ballSpeedXSign < 0) {
     if (ballY > paddleLocationA - BALL_SIZE && ballY < paddleLocationA + PADDLE_HEIGHT) {
       soundBounce();
-      ballSpeedX *= -1;
+      ballSpeedXSign *= -1;
+      hitCounter++;
     
       addEffect(paddleSpeedA);
+      if(hitCounter % 10 == 0) soundArpeggioUp();
     }
 
   }
 
   //bounce from paddle B
-  if (ballX >= SCREEN_WIDTH-PADDLE_WIDTH-PADDLE_PADDING-BALL_SIZE && ballX <= SCREEN_WIDTH-PADDLE_PADDING-BALL_SIZE && ballSpeedX > 0) {
+  if (ballX >= SCREEN_WIDTH-PADDLE_WIDTH-PADDLE_PADDING-BALL_SIZE && ballX <= SCREEN_WIDTH-PADDLE_PADDING-BALL_SIZE && ballSpeedXSign > 0) {
     if (ballY > paddleLocationB - BALL_SIZE && ballY < paddleLocationB + PADDLE_HEIGHT) {
       soundBounce();
-      ballSpeedX *= -1;
-    
+      ballSpeedXSign *= -1;
+      hitCounter++;    
       addEffect(paddleSpeedB);
+
+      if(hitCounter % 10 == 0) soundArpeggioUp();
     }
 
   }
 
   //score points if ball hits wall behind paddle
-  if (ballX >= SCREEN_WIDTH - BALL_SIZE || ballX <= 0) {
-    if (ballSpeedX > 0) {
-      scoreA++;
-      ballX = SCREEN_WIDTH / 4;
-    }
-    if (ballSpeedX < 0) {
-      scoreB++;
-      ballX = SCREEN_WIDTH / 4 * 3;
-    }
-
-    soundPoint();   
+  if (ballX >= SCREEN_WIDTH - BALL_SIZE) {
+    scoreA++;
+    ballX = SCREEN_WIDTH / 4;
+    soundPoint();
+  } else if(ballX <= 0) {
+    scoreB++;
+    ballX = SCREEN_WIDTH / 4 * 3;
+    soundPoint();
   }
 
   //set last paddle locations
   lastPaddleLocationA = paddleLocationA;
-  lastPaddleLocationB = paddleLocationB;  
+  lastPaddleLocationB = paddleLocationB;
+
+  if(settings & SETTING_ACCEL) {
+    // accelerate x-motion of the ball, if option is activated
+    ballSpeedX = ballSpeedXSign * (ballSpeedXStartWithAccel + floor(hitCounter / 10) * ballSpeedXDelta);
+  } else {
+    ballSpeedX = ballSpeedXSign * ballSpeedXStartWithoutAccel;
+  }
 }
 
 void draw() 
@@ -310,6 +331,14 @@ void draw()
   //+1 because of dotted line
   display.setCursor(SCREEN_WIDTH/2 + SCORE_PADDING+1,0);
   display.print(scoreB);
+
+#ifdef SHOW_DEBUG_DATA
+  //debug data for game acceleration
+  display.setCursor(0,0);
+  display.print(hitCounter);
+  display.setCursor(0,9);
+  display.print(ballSpeedX);
+#endif
   
   display.display();
 } 
@@ -330,7 +359,7 @@ void addEffect(int paddleSpeed)
   ballSpeedY = signum(ballSpeedY) * min(abs(ballSpeedY),MAX_Y_SPEED);
 }
 
-void soundStart() 
+void soundArpeggioUp() 
 {
   tone(BEEPER, 250);
   delay(100);

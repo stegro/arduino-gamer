@@ -31,7 +31,7 @@
 #define PIN_BUTTON_B 3
 #define PIN_BUTTON_C 4
 #define PIN_BUTTON_D 5
-const int debounceDelay = 60;
+const int debounceDelay = 100;
 
 #define OLED_CLK   13
 #define OLED_MOSI  11  // Hardware SPI port

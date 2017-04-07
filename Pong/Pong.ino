@@ -59,18 +59,18 @@ const int debounceDelay = 100;
 //Define Variables
 Gamer_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 
-const int UNDEF_STATE = 0;
-const int MENU_STATE = 1;
-const int PLAY_STATE = 2;
+const byte UNDEF_STATE = 0;
+const byte MENU_STATE = 1;
+const byte PLAY_STATE = 2;
 
-int game_state = UNDEF_STATE;
+byte game_state = UNDEF_STATE;
 
-int settings = 0;
-int menu_cursor = 0;
+byte settings = 0;
+byte menu_cursor = 0;
 const char* settings_text[] = {"Sound","Spiel beschleunigt"};
-const int SETTING_SOUND = 1<<0;
-const int SETTING_ACCEL = 1<<1;
-const int n_settings = 2;
+const byte SETTING_SOUND = 1<<0;
+const byte SETTING_ACCEL = 1<<1;
+const byte n_settings = 2;
 
 int paddleLocationA = 0;
 int paddleLocationB = 0;
@@ -153,13 +153,13 @@ void splash()
 */
 void settings_menu()
 {
-  int line_height = 1 + 7 + 1;
+  byte line_height = 1 + 7 + 1;
   display.clearDisplay(); 
   display.setTextColor(WHITE);
   centerPrint("EINSTELLUNGEN",1,1);
 
   char onoff_char[] = "x";
-  for(int i = 0; i < n_settings; i++) {
+  for(byte i = 0; i < n_settings; i++) {
     display.setTextSize(1);
     //display.setCursor(1,y);
     if(settings & ( 1 << i )) {
@@ -313,7 +313,7 @@ void draw()
   display.fillRect(SCREEN_WIDTH-PADDLE_WIDTH-PADDLE_PADDING,paddleLocationB,PADDLE_WIDTH,PADDLE_HEIGHT,WHITE);
 
   //draw center line
-  for (int i=0; i<SCREEN_HEIGHT; i+=4) {
+  for (byte i=0; i<SCREEN_HEIGHT; i+=4) {
     display.drawFastVLine(SCREEN_WIDTH/2, i, 2, WHITE);
   }
 
@@ -323,7 +323,7 @@ void draw()
   //print scores
 
   //backwards indent score A
-  int scoreAWidth = 6 * FONT_SIZE * ceil(log10(scoreA));
+  byte scoreAWidth = 6 * FONT_SIZE * ceil(log10(scoreA));
 
   display.setCursor(SCREEN_WIDTH/2 - SCORE_PADDING - scoreAWidth,0);
   display.print(scoreA);
@@ -373,7 +373,7 @@ void soundArpeggioUp()
 /*
 this returns -1, 0 or +1, depending on the sign of value
  */
-int signum(float value)
+signed char signum(float value)
 {
   // a branchless way to express signum
   return (0 < value) - (value < 0);
@@ -391,14 +391,14 @@ void soundPoint()
     tone(BEEPER, 150, 150);
 }
 
-void centerPrint(const char *text, int y, int size)
+void centerPrint(const char *text, byte y, byte size)
 {
   display.setTextSize(size);
   display.setCursor(SCREEN_WIDTH/2 - ((strlen(text))*6*size)/2,y);
   display.print(text);
 }
 
-void lalignPrint(const char *text, int x, int y)
+void lalignPrint(const char *text, byte x, byte y)
 {
   display.setTextSize(1);
   display.setCursor(x,y);

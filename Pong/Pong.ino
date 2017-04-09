@@ -179,6 +179,10 @@ void settings_menu()
     lalignPrint(settings_text[i],9,(1+i)*line_height);
   }
 
+  display.fillRect(0,SCREEN_HEIGHT-10,SCREEN_WIDTH,10,WHITE);
+  display.setTextColor(BLACK);
+  scrollPrint("Abwaerts: Taste A  Aendern: B  Start: D  ",SCREEN_HEIGHT-9,1);
+
   if(digitalRead(PIN_BUTTON_D) == LOW){
     // do some final initialisation according to chosen settings
     if(settings & SETTING_ACCEL) { 
@@ -321,6 +325,7 @@ void draw()
   display.fillRect(ballX,ballY,BALL_SIZE,BALL_SIZE,WHITE);
 
   //print scores
+  display.setTextColor(WHITE);
 
   //backwards indent score A
   byte scoreAWidth = 6 * FONT_SIZE * ceil(log10(scoreA));
@@ -396,6 +401,28 @@ void centerPrint(const char *text, byte y, byte size)
   display.setTextSize(size);
   display.setCursor(SCREEN_WIDTH/2 - ((strlen(text))*6*size)/2,y);
   display.print(text);
+}
+
+void scrollPrint(const char *text, byte y, byte size)
+{
+  //If an object that has static storage duration is not initialized explicitly, then:
+  // if it has arithmetic type, it is initialized to (positive or unsigned) zero;
+  static int xposition;
+
+  int text_length = (strlen(text))*6*size;
+  xposition -= 2;
+  xposition = xposition < -text_length ? xposition + text_length : xposition;
+
+  display.setTextSize(size);
+
+  display.setCursor(xposition,y);
+  display.print(text);
+
+  if(xposition + text_length < SCREEN_WIDTH) {
+    display.setCursor(xposition+text_length,y);
+    display.print(text);
+  }
+
 }
 
 void lalignPrint(const char *text, byte x, byte y)

@@ -52,7 +52,6 @@ const int debounceDelay = 100;
 #define SCORE_PADDING 10
 
 #define EFFECT_SPEED 0.8
-#define MIN_Y_SPEED 0.8
 #define MAX_Y_SPEED 2
 
 
@@ -363,9 +362,6 @@ void addEffect(int paddleSpeed)
   //add effect to ball when paddle is moving while bouncing.
   //for every pixel of paddle movement, add or substact EFFECT_SPEED to ballspeed.
   ballSpeedY += floor(paddleSpeed)*EFFECT_SPEED;
-
-  //limit to minimum speed
-  ballSpeedY = signum(ballSpeedY) * max(abs(ballSpeedY),MIN_Y_SPEED);
 
   //limit to maximum speed
   ballSpeedY = signum(ballSpeedY) * min(abs(ballSpeedY),MAX_Y_SPEED);

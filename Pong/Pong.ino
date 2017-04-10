@@ -82,9 +82,24 @@ float ballSpeedXStartWithAccel = 1.2;
 
 float ballSpeedXStartWithoutAccel = 2;
 
-float ballSpeedXSign = 1;
-float ballSpeedX = ballSpeedXStartWithoutAccel;
-float ballSpeedY = 1;
+/*
+the ballSpeed consists of
+  0) a regular speed (which justs persists; according to game level, hits, etc),
+  1) an additive effect contribution which vanishes at the next paddle hit
+  2) an additive effect contribution which vanishes at the next wall hit
+*/
+float ballSpeedX[] = {ballSpeedXStartWithoutAccel, 0.0, 0.0};
+float ballSpeedY[] = {1.0, 0.0, 0.0};
+/*
+the ballSpeedFactor is applied to the total speed, and consists of
+  0) a regular factor (which just persists)
+  1) a factor which becomes 1.0 at the next paddle hit
+  1) a factor which becomes 1.0 at the next wall hit
+*/
+float ballSpeedFactor[] = {1.0, 1.0, 1.0};
+
+float totalBallSpeedX = 0;
+float totalBallSpeedY = 0;
 
 int lastPaddleLocationA = 0;
 int lastPaddleLocationB = 0;
@@ -185,9 +200,9 @@ void settings_menu()
   if(digitalRead(PIN_BUTTON_D) == LOW){
     // do some final initialisation according to chosen settings
     if(settings & SETTING_ACCEL) { 
-      ballSpeedX = ballSpeedXStartWithAccel;
+      ballSpeedX[0] = ballSpeedXStartWithAccel;
     } else {
-      ballSpeedX = ballSpeedXStartWithoutAccel;
+      ballSpeedX[0] = ballSpeedXStartWithoutAccel;
     }
     
     // leave menu and start playing
@@ -247,39 +262,55 @@ void calculateMovement()
   int paddleSpeedA = paddleLocationA - lastPaddleLocationA;
   int paddleSpeedB = paddleLocationB - lastPaddleLocationB;
 
-  ballX += ballSpeedX;
-  ballY += ballSpeedY;
+  ballX += totalBallSpeedX;
+  ballY += totalBallSpeedY;
 
   //bounce from top and bottom
   if (ballY >= SCREEN_HEIGHT - BALL_SIZE || ballY <= 0) {
-    ballSpeedY *= -1;
+    // clear effects
+    ballSpeedX[2] = 0.0;
+    ballSpeedFactor[2] = 1.0;
+
+    reverseVelocity(ballSpeedY,3);
     soundBounce();
   }
 
-  //bounce from paddle A
-  if (ballX >= PADDLE_PADDING && ballX <= PADDLE_PADDING+BALL_SIZE && ballSpeedXSign < 0) {
-    if (ballY > paddleLocationA - BALL_SIZE && ballY < paddleLocationA + PADDLE_HEIGHT) {
-      soundBounce();
-      ballSpeedXSign *= -1;
-      hitCounter++;
-    
-      addEffect(paddleSpeedA);
-      if(hitCounter % 10 == 0) soundArpeggioUp();
-    }
+  //bounce from paddle A. The ballSpeed is used to avoid artifacts.
+  if (totalBallSpeedX < 0 && ballTouchesRect(ballX, ballY, BALL_SIZE,
+		      PADDLE_PADDING, paddleLocationA,
+		      PADDLE_WIDTH, PADDLE_HEIGHT)) {
+    //clear effects
+    ballSpeedX[1] = 0.0;
+    ballSpeedFactor[1] = 1.0;
 
+    reverseVelocity(ballSpeedX,3);
+    
+    hitCounter++;
+    addPaddleSpeedEffect(paddleSpeedA);
+    if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
+      ballSpeedFactor[0] += 0.05;
+      soundArpeggioUp();
+    } else
+      soundBounce();
   }
 
-  //bounce from paddle B
-  if (ballX >= SCREEN_WIDTH-PADDLE_WIDTH-PADDLE_PADDING-BALL_SIZE && ballX <= SCREEN_WIDTH-PADDLE_PADDING-BALL_SIZE && ballSpeedXSign > 0) {
-    if (ballY > paddleLocationB - BALL_SIZE && ballY < paddleLocationB + PADDLE_HEIGHT) {
+  if (totalBallSpeedX > 0 && ballTouchesRect(ballX, ballY, BALL_SIZE,
+		      SCREEN_WIDTH-PADDLE_PADDING-PADDLE_WIDTH, paddleLocationB,
+		      PADDLE_WIDTH, PADDLE_HEIGHT)) {
+    //clear effects
+    ballSpeedX[1] = 0.0;
+    ballSpeedFactor[1] = 1.0;
+    
+    reverseVelocity(ballSpeedX,3);
+
+    hitCounter++;
+    addPaddleSpeedEffect(paddleSpeedB);
+
+    if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
+      ballSpeedFactor[0] += 0.05;
+      soundArpeggioUp();
+    } else
       soundBounce();
-      ballSpeedXSign *= -1;
-      hitCounter++;    
-      addEffect(paddleSpeedB);
-
-      if(hitCounter % 10 == 0) soundArpeggioUp();
-    }
-
   }
 
   //score points if ball hits wall behind paddle
@@ -289,14 +320,14 @@ void calculateMovement()
 
     // put Ball back in game
     ballX = SCREEN_WIDTH / 4 * 3;
-    ballSpeedXSign *= -1;
+    reverseVelocity(ballSpeedX,3);
     
   } else if(ballX <= 0) {
     scoreB++;
     soundPoint();
 
     ballX = SCREEN_WIDTH / 4;
-    ballSpeedXSign *= -1;
+    reverseVelocity(ballSpeedX,3);
 
   }
 
@@ -304,11 +335,16 @@ void calculateMovement()
   lastPaddleLocationA = paddleLocationA;
   lastPaddleLocationB = paddleLocationB;
 
-  if(settings & SETTING_ACCEL) {
-    // accelerate x-motion of the ball, if option is activated
-    ballSpeedX = ballSpeedXSign * (ballSpeedXStartWithAccel + floor(hitCounter / 10) * ballSpeedXDelta);
-  } else {
-    ballSpeedX = ballSpeedXSign * ballSpeedXStartWithoutAccel;
+  // accelerate x-motion of the ball, if option is activated
+  totalBallSpeedX = 0.0;
+  totalBallSpeedY = 0.0;
+  for(byte i = 0; i < 3; i++) {
+    totalBallSpeedX += ballSpeedX[i];
+    totalBallSpeedY += ballSpeedY[i];
+  }
+  for(byte i = 0; i < 3; i++) {
+    totalBallSpeedX *= ballSpeedFactor[i];
+    totalBallSpeedY *= ballSpeedFactor[i];
   }
 }
 
@@ -344,15 +380,13 @@ void draw()
   display.print(scoreB);
 
 #ifdef SHOW_DEBUG_DATA
-  //debug data for game acceleration
+  //display some debug data
   display.setCursor(0,0);
   display.print(hitCounter);
   display.setCursor(0,9);
-  display.print(ballSpeedX);
+  display.print(totalBallSpeedX);
   display.setCursor(0,9*2);
-  display.print(ballSpeedY);
-  display.setCursor(0,9*3);
-  display.print(signum(ballSpeedY));
+  display.print(totalBallSpeedY);
 #endif
   
   display.display();
@@ -361,14 +395,14 @@ void draw()
 /*
 
  */
-void addEffect(int paddleSpeed)
+void addPaddleSpeedEffect(int paddleSpeed)
 {
   //add effect to ball when paddle is moving while bouncing.
   //for every pixel of paddle movement, add or substact EFFECT_SPEED to ballspeed.
-  ballSpeedY += floor(paddleSpeed)*EFFECT_SPEED;
+  ballSpeedY[0] += floor(paddleSpeed)*EFFECT_SPEED;
 
   //limit to maximum speed
-  ballSpeedY = signum(ballSpeedY) * min(abs(ballSpeedY),MAX_Y_SPEED);
+  ballSpeedY[0] = signum(ballSpeedY[0]) * min(abs(ballSpeedY[0]),MAX_Y_SPEED);
 }
 
 void soundArpeggioUp() 
@@ -380,6 +414,31 @@ void soundArpeggioUp()
   tone(BEEPER, 1000);
   delay(100);
   noTone(BEEPER);
+}
+
+/*
+note that this returns 1 (true) already on equality.
+ */
+byte ballTouchesRect(byte pointX, byte pointY, byte size, byte rectUpLeftX, byte rectUpLeftY, byte rectSizeX, byte rectSizeY)
+{
+  // the ball (actually a rectangle) and the paddle area intersect
+  return rectUpLeftX <= pointX + size &&
+  	  rectUpLeftY <= pointY + size &&
+  	  pointX <= rectUpLeftX + rectSizeX &&
+  	  pointY <= rectUpLeftY + rectSizeY;
+
+  // the ball (actually a rectangle) and the paddle front line intersect
+  /* return rectUpLeftX <= pointX + size && */
+  /* 	  rectUpLeftY <= pointY + size && */
+  /* 	  pointX <= rectUpLeftX + 1 && */
+  /* 	  pointY <= rectUpLeftY + 1; */
+  
+}
+
+void reverseVelocity(float *contributions, byte n)
+{
+  for(byte i = 0; i < n; i++)
+    contributions[i] *= -1;
 }
 
 /*

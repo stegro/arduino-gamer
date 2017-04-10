@@ -26,6 +26,7 @@
 #define CONTROL_A A2
 #define CONTROL_B A3
 
+#define UNCONNECTED_PIN 0
 
 // Note that according to https://www.arduino.cc/en/Reference/attachInterrupt
 // only buttons A and B can have interrupts
@@ -81,6 +82,9 @@ const float accelEffectFactorDelta = 0.1;
 const float ballSpeedXStartWithAccel = 1.2;
 const float ballSpeedXStartWithoutAccel = 2;
 
+
+#define RANDOM_CONTRIB_AMPLITUDE 0.3
+
 /*
 the ballSpeed consists of
   0) a regular speed (which justs persists; according to game level, hits, etc),
@@ -88,7 +92,7 @@ the ballSpeed consists of
   2) an additive effect contribution which vanishes at the next wall hit
 */
 float ballSpeedX[] = {ballSpeedXStartWithoutAccel, 0.0, 0.0};
-float ballSpeedY[] = {1.0, 0.0, 0.0};
+float ballSpeedY[] = {0.0, 0.0, 0.0};
 /*
 the ballSpeedFactor is applied to the total speed, and consists of
   0) a regular factor (which just persists)
@@ -111,6 +115,12 @@ void setup()
 {
   pinMode(BEEPER_GND, OUTPUT);
   digitalWrite(BEEPER_GND, LOW);
+
+  // if analog input pin 0 is unconnected, random analog
+  // noise will cause the call to randomSeed() to generate
+  // different seed numbers each time the sketch runs.
+  // randomSeed() will then shuffle the random function.
+  randomSeed(analogRead(UNCONNECTED_PIN));
   
   display.begin(SSD1306_SWITCHCAPVCC);  // initialize with the I2C addr 0x3D (for the 128x64)
   display.ssd1306_command(SSD1306_SETDISPLAYCLOCKDIV); // Set maximum diplay clock
@@ -266,9 +276,7 @@ void calculateMovement()
 
   //bounce from top and bottom
   if (ballY >= SCREEN_HEIGHT - BALL_SIZE || ballY <= 0) {
-    // clear effects
-    ballSpeedX[2] = 0.0;
-    ballSpeedFactor[2] = 1.0;
+    clearEffectsOnWall();
 
     reverseVelocity(ballSpeedY,3);
     soundBounce();
@@ -278,14 +286,14 @@ void calculateMovement()
   if (totalBallSpeedX < 0 && ballTouchesRect(ballX, ballY, BALL_SIZE,
 		      PADDLE_PADDING, paddleLocationA,
 		      PADDLE_WIDTH, PADDLE_HEIGHT)) {
-    //clear effects
-    ballSpeedX[1] = 0.0;
-    ballSpeedFactor[1] = 1.0;
+    clearEffectsOnPaddle();
 
     reverseVelocity(ballSpeedX,3);
     
     hitCounter++;
     addPaddleSpeedEffect(paddleSpeedA);
+    ballSpeedY[0] += random(-127,127)*RANDOM_CONTRIB_AMPLITUDE/255.0;
+    
     if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
       ballSpeedFactor[0] += accelEffectFactorDelta;
       soundArpeggioUp();
@@ -296,14 +304,13 @@ void calculateMovement()
   if (totalBallSpeedX > 0 && ballTouchesRect(ballX, ballY, BALL_SIZE,
 		      SCREEN_WIDTH-PADDLE_PADDING-PADDLE_WIDTH, paddleLocationB,
 		      PADDLE_WIDTH, PADDLE_HEIGHT)) {
-    //clear effects
-    ballSpeedX[1] = 0.0;
-    ballSpeedFactor[1] = 1.0;
+    clearEffectsOnPaddle();
     
     reverseVelocity(ballSpeedX,3);
 
     hitCounter++;
     addPaddleSpeedEffect(paddleSpeedB);
+    ballSpeedY[0] += random(-127,127)*RANDOM_CONTRIB_AMPLITUDE/255.0;
 
     if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
       ballSpeedFactor[0] += 0.05;
@@ -314,6 +321,8 @@ void calculateMovement()
 
   //score points if ball hits wall behind paddle
   if (ballX >= SCREEN_WIDTH - BALL_SIZE) {
+    clearEffectsOnPaddle();
+    
     scoreA++;
     soundPoint();
 
@@ -322,6 +331,8 @@ void calculateMovement()
     reverseVelocity(ballSpeedX,3);
     
   } else if(ballX <= 0) {
+    clearEffectsOnPaddle();
+    
     scoreB++;
     soundPoint();
 
@@ -345,6 +356,25 @@ void calculateMovement()
     totalBallSpeedX *= ballSpeedFactor[i];
     totalBallSpeedY *= ballSpeedFactor[i];
   }
+
+  //limit to maximum speed
+  totalBallSpeedY = signum(totalBallSpeedY) * min(abs(totalBallSpeedY),MAX_Y_SPEED);
+
+}
+
+void clearEffectsOnWall()
+{
+  ballSpeedX[2] = 0.0;
+  ballSpeedY[2] = 0.0;
+  ballSpeedFactor[2] = 1.0;
+}
+
+void clearEffectsOnPaddle()
+{
+  //clear effects
+  ballSpeedX[1] = 0.0;
+  ballSpeedY[1] = 0.0;
+  ballSpeedFactor[1] = 1.0;
 }
 
 void draw() 
@@ -398,10 +428,7 @@ void addPaddleSpeedEffect(const int paddleSpeed)
 {
   //add effect to ball when paddle is moving while bouncing.
   //for every pixel of paddle movement, add or substact EFFECT_SPEED to ballspeed.
-  ballSpeedY[0] += floor(paddleSpeed)*EFFECT_SPEED;
-
-  //limit to maximum speed
-  ballSpeedY[0] = signum(ballSpeedY[0]) * min(abs(ballSpeedY[0]),MAX_Y_SPEED);
+  ballSpeedY[1] += floor(paddleSpeed)*EFFECT_SPEED;
 }
 
 void soundArpeggioUp() 

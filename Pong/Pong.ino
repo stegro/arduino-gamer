@@ -71,16 +71,15 @@ const byte SETTING_SOUND = 1<<0;
 const byte SETTING_ACCEL = 1<<1;
 const byte n_settings = 2;
 
-int paddleLocationA = 0;
-int paddleLocationB = 0;
+byte paddleLocationA = 0;
+byte paddleLocationB = 0;
 
 float ballX = SCREEN_WIDTH/2;
 float ballY = SCREEN_HEIGHT/2;
 // if SETTING_ACCEL is active, these parameters determine game acceleration 
-float ballSpeedXDelta = 0.1;
-float ballSpeedXStartWithAccel = 1.2;
-
-float ballSpeedXStartWithoutAccel = 2;
+const float accelEffectFactorDelta = 0.1;
+const float ballSpeedXStartWithAccel = 1.2;
+const float ballSpeedXStartWithoutAccel = 2;
 
 /*
 the ballSpeed consists of
@@ -101,12 +100,12 @@ float ballSpeedFactor[] = {1.0, 1.0, 1.0};
 float totalBallSpeedX = 0;
 float totalBallSpeedY = 0;
 
-int lastPaddleLocationA = 0;
-int lastPaddleLocationB = 0;
+byte lastPaddleLocationA = 0;
+byte lastPaddleLocationB = 0;
 
-int scoreA = 0;
-int scoreB = 0;
-int hitCounter = 0;
+byte scoreA = 0;
+byte scoreB = 0;
+unsigned int hitCounter = 0;
 
 void setup() 
 {
@@ -288,7 +287,7 @@ void calculateMovement()
     hitCounter++;
     addPaddleSpeedEffect(paddleSpeedA);
     if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
-      ballSpeedFactor[0] += 0.05;
+      ballSpeedFactor[0] += accelEffectFactorDelta;
       soundArpeggioUp();
     } else
       soundBounce();
@@ -370,7 +369,7 @@ void draw()
   display.setTextColor(WHITE);
 
   //backwards indent score A
-  byte scoreAWidth = 6 * FONT_SIZE * ceil(log10(scoreA));
+  const byte scoreAWidth = 6 * FONT_SIZE * ceil(log10(scoreA));
 
   display.setCursor(SCREEN_WIDTH/2 - SCORE_PADDING - scoreAWidth,0);
   display.print(scoreA);
@@ -395,7 +394,7 @@ void draw()
 /*
 
  */
-void addPaddleSpeedEffect(int paddleSpeed)
+void addPaddleSpeedEffect(const int paddleSpeed)
 {
   //add effect to ball when paddle is moving while bouncing.
   //for every pixel of paddle movement, add or substact EFFECT_SPEED to ballspeed.
@@ -419,7 +418,7 @@ void soundArpeggioUp()
 /*
 note that this returns 1 (true) already on equality.
  */
-byte ballTouchesRect(byte pointX, byte pointY, byte size, byte rectUpLeftX, byte rectUpLeftY, byte rectSizeX, byte rectSizeY)
+byte ballTouchesRect(const byte pointX, const byte pointY, const byte size, const byte rectUpLeftX, const byte rectUpLeftY, const byte rectSizeX, const byte rectSizeY)
 {
   // the ball (actually a rectangle) and the paddle area intersect
   return rectUpLeftX <= pointX + size &&
@@ -435,7 +434,7 @@ byte ballTouchesRect(byte pointX, byte pointY, byte size, byte rectUpLeftX, byte
   
 }
 
-void reverseVelocity(float *contributions, byte n)
+void reverseVelocity(float *contributions, const byte n)
 {
   for(byte i = 0; i < n; i++)
     contributions[i] *= -1;
@@ -444,7 +443,7 @@ void reverseVelocity(float *contributions, byte n)
 /*
 this returns -1, 0 or +1, depending on the sign of value
  */
-signed char signum(float value)
+signed char signum(const float value)
 {
   // a branchless way to express signum
   return (0 < value) - (value < 0);
@@ -462,20 +461,20 @@ void soundPoint()
     tone(BEEPER, 150, 150);
 }
 
-void centerPrint(const char *text, byte y, byte size)
+void centerPrint(const char *text, const byte y, const byte size)
 {
   display.setTextSize(size);
   display.setCursor(SCREEN_WIDTH/2 - ((strlen(text))*6*size)/2,y);
   display.print(text);
 }
 
-void scrollPrint(const char *text, byte y, byte size)
+void scrollPrint(const char *text, const byte y, const byte size)
 {
   //If an object that has static storage duration is not initialized explicitly, then:
   // if it has arithmetic type, it is initialized to (positive or unsigned) zero;
   static int xposition;
 
-  int text_length = (strlen(text))*6*size;
+  const int text_length = (strlen(text))*6*size;
   xposition -= 2;
   xposition = xposition < -text_length ? xposition + text_length : xposition;
 

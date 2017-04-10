@@ -48,7 +48,7 @@ const int debounceDelay = 100;
 #define SCREEN_HEIGHT 63  //real size minus 1, because coordinate system starts with 0
 #define PADDLE_WIDTH 4
 #define PADDLE_HEIGHT 14
-#define PADDLE_PADDING 10
+#define PADDLE_PADDING 1
 #define BALL_SIZE 3
 #define SCORE_PADDING 10
 

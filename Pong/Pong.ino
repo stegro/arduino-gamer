@@ -217,7 +217,7 @@ void menu_cursor_down() {
   // if it has arithmetic type, it is initialized to (positive or unsigned) zero;
   static int last_time_pressed;
   
-  if(game_state = MENU_STATE && millis() - last_time_pressed > debounceDelay) {
+  if(game_state == MENU_STATE && millis() - last_time_pressed > debounceDelay) {
     menu_cursor = (menu_cursor + 1) % n_settings;
     last_time_pressed = millis();
   }
@@ -229,7 +229,7 @@ void menu_toggle() {
   // (positive or unsigned) zero
   static int last_time_pressed;
   
-  if(game_state = MENU_STATE && millis() - last_time_pressed > debounceDelay) {
+  if(game_state == MENU_STATE && millis() - last_time_pressed > debounceDelay) {
     // toggle the setting the menu_cursor points to
     settings = settings ^ (1 << menu_cursor);
     last_time_pressed = millis();

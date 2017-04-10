@@ -55,6 +55,12 @@ const int debounceDelay = 100;
 #define EFFECT_SPEED 0.8
 #define MAX_Y_SPEED 2
 
+#define N_CONTRIBUTIONS 4
+#define PERSISTENT_EFFECT 0
+#define EFFECT_TILL_POINT 1
+#define EFFECT_TILL_PADDLE_HIT 2
+#define EFFECT_TILL_WALL_HIT 3
+
 
 //Define Variables
 Gamer_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
@@ -91,15 +97,15 @@ the ballSpeed consists of
   1) an additive effect contribution which vanishes at the next paddle hit
   2) an additive effect contribution which vanishes at the next wall hit
 */
-float ballSpeedX[] = {ballSpeedXStartWithoutAccel, 0.0, 0.0};
-float ballSpeedY[] = {0.0, 0.0, 0.0};
+float ballSpeedX[] = {ballSpeedXStartWithoutAccel, 0.0,0.0, 0.0};
+float ballSpeedY[] = {0.0, 0.0, 0.0,0.0};
 /*
 the ballSpeedFactor is applied to the total speed, and consists of
   0) a regular factor (which just persists)
   1) a factor which becomes 1.0 at the next paddle hit
   1) a factor which becomes 1.0 at the next wall hit
 */
-float ballSpeedFactor[] = {1.0, 1.0, 1.0};
+float ballSpeedFactor[] = {1.0, 1.0, 1.0, 1.0};
 
 float totalBallSpeedX = 0;
 float totalBallSpeedY = 0;
@@ -278,7 +284,7 @@ void calculateMovement()
   if (ballY >= SCREEN_HEIGHT - BALL_SIZE || ballY <= 0) {
     clearEffectsOnWall();
 
-    reverseVelocity(ballSpeedY,3);
+    reverseVelocity(ballSpeedY,N_CONTRIBUTIONS);
     soundBounce();
   }
 
@@ -288,14 +294,14 @@ void calculateMovement()
 		      PADDLE_WIDTH, PADDLE_HEIGHT)) {
     clearEffectsOnPaddle();
 
-    reverseVelocity(ballSpeedX,3);
+    reverseVelocity(ballSpeedX,N_CONTRIBUTIONS);
     
     hitCounter++;
     addPaddleSpeedEffect(paddleSpeedA);
-    ballSpeedY[0] += random(-127,127)*RANDOM_CONTRIB_AMPLITUDE/255.0;
+    ballSpeedY[EFFECT_TILL_POINT] += random(-127,127)*RANDOM_CONTRIB_AMPLITUDE/255.0;
     
     if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
-      ballSpeedFactor[0] += accelEffectFactorDelta;
+      ballSpeedFactor[PERSISTENT_EFFECT] += accelEffectFactorDelta;
       soundArpeggioUp();
     } else
       soundBounce();
@@ -306,14 +312,14 @@ void calculateMovement()
 		      PADDLE_WIDTH, PADDLE_HEIGHT)) {
     clearEffectsOnPaddle();
     
-    reverseVelocity(ballSpeedX,3);
+    reverseVelocity(ballSpeedX,N_CONTRIBUTIONS);
 
     hitCounter++;
     addPaddleSpeedEffect(paddleSpeedB);
-    ballSpeedY[0] += random(-127,127)*RANDOM_CONTRIB_AMPLITUDE/255.0;
+    ballSpeedY[EFFECT_TILL_POINT] += random(-127,127)*RANDOM_CONTRIB_AMPLITUDE/255.0;
 
     if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
-      ballSpeedFactor[0] += 0.05;
+      ballSpeedFactor[PERSISTENT_EFFECT] += 0.05;
       soundArpeggioUp();
     } else
       soundBounce();
@@ -321,23 +327,23 @@ void calculateMovement()
 
   //score points if ball hits wall behind paddle
   if (ballX >= SCREEN_WIDTH - BALL_SIZE) {
-    clearEffectsOnPaddle();
+    clearEffectsOnPoint();
     
     scoreA++;
     soundPoint();
 
     // put Ball back in game
     ballX = SCREEN_WIDTH / 4 * 3;
-    reverseVelocity(ballSpeedX,3);
+    reverseVelocity(ballSpeedX,N_CONTRIBUTIONS);
     
   } else if(ballX <= 0) {
-    clearEffectsOnPaddle();
+    clearEffectsOnPoint();
     
     scoreB++;
     soundPoint();
 
     ballX = SCREEN_WIDTH / 4;
-    reverseVelocity(ballSpeedX,3);
+    reverseVelocity(ballSpeedX,N_CONTRIBUTIONS);
 
   }
 
@@ -348,11 +354,11 @@ void calculateMovement()
   // accelerate x-motion of the ball, if option is activated
   totalBallSpeedX = 0.0;
   totalBallSpeedY = 0.0;
-  for(byte i = 0; i < 3; i++) {
+  for(byte i = 0; i < N_CONTRIBUTIONS; i++) {
     totalBallSpeedX += ballSpeedX[i];
     totalBallSpeedY += ballSpeedY[i];
   }
-  for(byte i = 0; i < 3; i++) {
+  for(byte i = 0; i < N_CONTRIBUTIONS; i++) {
     totalBallSpeedX *= ballSpeedFactor[i];
     totalBallSpeedY *= ballSpeedFactor[i];
   }
@@ -364,17 +370,26 @@ void calculateMovement()
 
 void clearEffectsOnWall()
 {
-  ballSpeedX[2] = 0.0;
-  ballSpeedY[2] = 0.0;
-  ballSpeedFactor[2] = 1.0;
+  ballSpeedX[EFFECT_TILL_WALL_HIT] = 0.0;
+  ballSpeedY[EFFECT_TILL_WALL_HIT] = 0.0;
+  ballSpeedFactor[EFFECT_TILL_WALL_HIT] = 1.0;
 }
 
 void clearEffectsOnPaddle()
 {
-  //clear effects
-  ballSpeedX[1] = 0.0;
-  ballSpeedY[1] = 0.0;
-  ballSpeedFactor[1] = 1.0;
+  ballSpeedX[EFFECT_TILL_PADDLE_HIT] = 0.0;
+  ballSpeedY[EFFECT_TILL_PADDLE_HIT] = 0.0;
+  ballSpeedFactor[EFFECT_TILL_PADDLE_HIT] = 1.0;
+  
+  clearEffectsOnWall();
+}
+void clearEffectsOnPoint()
+{
+  ballSpeedX[EFFECT_TILL_POINT] = 0.0;
+  ballSpeedY[EFFECT_TILL_POINT] = 0.0;
+  ballSpeedFactor[EFFECT_TILL_POINT] = 1.0;
+
+  clearEffectsOnPaddle();
 }
 
 void draw() 
@@ -428,7 +443,7 @@ void addPaddleSpeedEffect(const int paddleSpeed)
 {
   //add effect to ball when paddle is moving while bouncing.
   //for every pixel of paddle movement, add or substact EFFECT_SPEED to ballspeed.
-  ballSpeedY[1] += floor(paddleSpeed)*EFFECT_SPEED;
+  ballSpeedY[EFFECT_TILL_PADDLE_HIT] += floor(paddleSpeed)*EFFECT_SPEED;
 }
 
 void soundArpeggioUp() 

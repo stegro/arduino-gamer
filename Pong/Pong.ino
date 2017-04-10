@@ -61,6 +61,8 @@ const int debounceDelay = 100;
 #define EFFECT_TILL_PADDLE_HIT 2
 #define EFFECT_TILL_WALL_HIT 3
 
+#define PLAYER_A 0
+#define PLAYER_B 1
 
 //Define Variables
 Gamer_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
@@ -71,12 +73,15 @@ const byte PLAY_STATE = 2;
 
 byte game_state = UNDEF_STATE;
 
+byte paddleHeight[] = {PADDLE_HEIGHT, PADDLE_HEIGHT};
+
 byte settings = 0;
 byte menu_cursor = 0;
-const char* settings_text[] = {"Sound","Spiel beschleunigt"};
+const char* settings_text[] = {"Sound","Spiel beschleunigt","Super-Items"};
 const byte SETTING_SOUND = 1<<0;
 const byte SETTING_ACCEL = 1<<1;
-const byte n_settings = 2;
+const byte SETTING_ITEMS = 1<<2;
+const byte n_settings = 3;
 
 byte paddleLocationA = 0;
 byte paddleLocationB = 0;
@@ -116,6 +121,17 @@ byte lastPaddleLocationB = 0;
 byte scoreA = 0;
 byte scoreB = 0;
 unsigned int hitCounter = 0;
+
+byte item_state = 0;
+// if an item appears or not is computed when the player hits the ball
+#define ITEM_APPEAR_PROBABILITY 0.06
+#define ITEM_RESET_PROBABILITY 0.09
+#define ITEM_TOP_A (1 << 0)
+#define ITEM_BOTTOM_A (1 << 1)
+#define ITEM_TOP_B (1 << 2)
+#define ITEM_BOTTOM_B (1 << 3)
+#define PLAYER_A_HAS_ITEM (1 << 4)
+#define PLAYER_B_HAS_ITEM (1 << 5)
 
 void setup() 
 {
@@ -271,8 +287,29 @@ void calculateMovement()
   int controlA = analogRead(CONTROL_A);
   int controlB = analogRead(CONTROL_B);
 
-  paddleLocationA = map(controlA, 0, 1023, 0, SCREEN_HEIGHT - PADDLE_HEIGHT);
-  paddleLocationB = map(controlB, 0, 1023, 0, SCREEN_HEIGHT - PADDLE_HEIGHT);
+  paddleLocationA = map(controlA, 0, 1023, 0, SCREEN_HEIGHT - paddleHeight[PLAYER_A]);
+  paddleLocationB = map(controlB, 0, 1023, 0, SCREEN_HEIGHT - paddleHeight[PLAYER_B]);
+
+#define ITEM_ACTIVATION_NPIXELS 2
+  if(settings & SETTING_ITEMS) {
+    if(item_state & ITEM_TOP_A && paddleLocationA <= ITEM_ACTIVATION_NPIXELS) {
+      // clear it
+      item_state -= ITEM_TOP_A;
+      item_state += PLAYER_A_HAS_ITEM;
+    }else if(item_state & ITEM_BOTTOM_A && paddleLocationA >= SCREEN_HEIGHT-paddleHeight[PLAYER_A]-ITEM_ACTIVATION_NPIXELS) {
+      // clear it
+      item_state -= ITEM_BOTTOM_A;
+      item_state += PLAYER_A_HAS_ITEM;
+    }else if(item_state & ITEM_TOP_B && paddleLocationB <= ITEM_ACTIVATION_NPIXELS) {
+      // clear it
+      item_state -= ITEM_TOP_B;
+      item_state += PLAYER_B_HAS_ITEM;
+    }else if(item_state & ITEM_BOTTOM_B && paddleLocationB >= SCREEN_HEIGHT-paddleHeight[PLAYER_B]-ITEM_ACTIVATION_NPIXELS) {
+      // clear it
+      item_state -= ITEM_BOTTOM_B;
+      item_state += PLAYER_B_HAS_ITEM;
+    }
+  }
 
   int paddleSpeedA = paddleLocationA - lastPaddleLocationA;
   int paddleSpeedB = paddleLocationB - lastPaddleLocationB;
@@ -291,7 +328,7 @@ void calculateMovement()
   //bounce from paddle A. The ballSpeed is used to avoid artifacts.
   if (totalBallSpeedX < 0 && ballTouchesRect(ballX, ballY, BALL_SIZE,
 		      PADDLE_PADDING, paddleLocationA,
-		      PADDLE_WIDTH, PADDLE_HEIGHT)) {
+		      PADDLE_WIDTH, paddleHeight[PLAYER_A])) {
     clearEffectsOnPaddle();
 
     reverseVelocity(ballSpeedX,N_CONTRIBUTIONS);
@@ -299,6 +336,23 @@ void calculateMovement()
     hitCounter++;
     addPaddleSpeedEffect(paddleSpeedA);
     ballSpeedY[EFFECT_TILL_POINT] += random(-127,127)*RANDOM_CONTRIB_AMPLITUDE/255.0;
+
+    if(settings & SETTING_ITEMS) {
+      if(item_state & PLAYER_A_HAS_ITEM) {
+	item_state -= PLAYER_A_HAS_ITEM;
+	applyItem(PLAYER_A);
+      }
+
+      if(random(100) <= ITEM_RESET_PROBABILITY*100) {
+	resetItems(PLAYER_A);
+      }
+      // clear both items
+      item_state &= ~(ITEM_TOP_A + ITEM_BOTTOM_A);
+      if(random(100) <= ITEM_APPEAR_PROBABILITY*100) {
+	// put a 1 in either the 1st bit or the 2nd
+	item_state |= 1 << (random(2));
+      }
+    }
     
     if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
       ballSpeedFactor[PERSISTENT_EFFECT] += accelEffectFactorDelta;
@@ -309,7 +363,7 @@ void calculateMovement()
 
   if (totalBallSpeedX > 0 && ballTouchesRect(ballX, ballY, BALL_SIZE,
 		      SCREEN_WIDTH-PADDLE_PADDING-PADDLE_WIDTH, paddleLocationB,
-		      PADDLE_WIDTH, PADDLE_HEIGHT)) {
+		      PADDLE_WIDTH, paddleHeight[PLAYER_B])) {
     clearEffectsOnPaddle();
     
     reverseVelocity(ballSpeedX,N_CONTRIBUTIONS);
@@ -317,6 +371,22 @@ void calculateMovement()
     hitCounter++;
     addPaddleSpeedEffect(paddleSpeedB);
     ballSpeedY[EFFECT_TILL_POINT] += random(-127,127)*RANDOM_CONTRIB_AMPLITUDE/255.0;
+
+    if(settings & SETTING_ITEMS) {
+      if(item_state & PLAYER_B_HAS_ITEM) {
+	item_state -= PLAYER_B_HAS_ITEM;
+	applyItem(PLAYER_B);
+      }
+      if(random(100) <= ITEM_RESET_PROBABILITY*100) {
+	resetItems(PLAYER_B);
+      }
+      // clear both items
+      item_state &= ~(ITEM_TOP_B + ITEM_BOTTOM_B);
+      if(random(100) <= ITEM_APPEAR_PROBABILITY*100) {
+	// put a 1 in either the 3rd bit or the 4th
+	item_state |= 1 << (random(2)+2);
+      }
+    }
 
     if(settings & SETTING_ACCEL && hitCounter % 10 == 0) {
       ballSpeedFactor[PERSISTENT_EFFECT] += 0.05;
@@ -397,10 +467,10 @@ void draw()
   display.clearDisplay(); 
 
   //draw paddle A
-  display.fillRect(PADDLE_PADDING,paddleLocationA,PADDLE_WIDTH,PADDLE_HEIGHT,WHITE);
+  display.fillRect(PADDLE_PADDING,paddleLocationA,PADDLE_WIDTH,paddleHeight[PLAYER_A],WHITE);
 
   //draw paddle B
-  display.fillRect(SCREEN_WIDTH-PADDLE_WIDTH-PADDLE_PADDING,paddleLocationB,PADDLE_WIDTH,PADDLE_HEIGHT,WHITE);
+  display.fillRect(SCREEN_WIDTH-PADDLE_WIDTH-PADDLE_PADDING,paddleLocationB,PADDLE_WIDTH,paddleHeight[PLAYER_B],WHITE);
 
   //draw center line
   for (byte i=0; i<SCREEN_HEIGHT; i+=4) {
@@ -423,6 +493,24 @@ void draw()
   display.setCursor(SCREEN_WIDTH/2 + SCORE_PADDING+1,0);
   display.print(scoreB);
 
+
+  if(settings & SETTING_ITEMS) {
+    if(item_state & ITEM_TOP_A) {
+#define ITEM_CIRCLE_RADIUS 8
+      display.drawCircle(0, 0, ITEM_CIRCLE_RADIUS, WHITE);
+    }
+    if(item_state & ITEM_BOTTOM_A) {
+      display.drawCircle(0, SCREEN_HEIGHT, ITEM_CIRCLE_RADIUS, WHITE);
+    }
+    if(item_state & ITEM_TOP_B) {
+      display.drawCircle(SCREEN_WIDTH, 0, ITEM_CIRCLE_RADIUS, WHITE);
+    }
+    if(item_state & ITEM_BOTTOM_B) {
+      display.drawCircle(SCREEN_WIDTH, SCREEN_HEIGHT, ITEM_CIRCLE_RADIUS, WHITE);
+    }
+  }
+  
+
 #ifdef SHOW_DEBUG_DATA
   //display some debug data
   display.setCursor(0,0);
@@ -431,6 +519,8 @@ void draw()
   display.print(totalBallSpeedX);
   display.setCursor(0,9*2);
   display.print(totalBallSpeedY);
+  display.setCursor(0,9*3);
+  display.print(item_state);
 #endif
   
   display.display();
@@ -480,6 +570,68 @@ void reverseVelocity(float *contributions, const byte n)
 {
   for(byte i = 0; i < n; i++)
     contributions[i] *= -1;
+}
+
+void applyItem(const byte player)
+{
+#define N_ITEMS_IMPLEMENTED 5
+
+  /*
+    Ideas:
+
+    * shot a number of fake balls which disappear at the middle line
+    
+    * make the other players paddle a thicker square (but this needs
+      proper reflection at north and south edges)
+      
+    * acid ball: burn a hole in the opponents paddle
+    
+    * djungle: grow something in the opponents half to hinder his/her view
+    
+    * quantum ball: send a wave function and let it collapse
+    
+    * make the opponents line to move the paddle a funny trajectory with a
+      longer way to go from top to bottom
+
+    * magnetic paddle: your paddle attracts the ball
+
+    * sinus ball: give the ball a weird wiggling trajectory
+
+    * portal: place a pair of portals which teleport the ball between them
+
+   */
+  
+  // randomly one item type
+  switch(random(N_ITEMS_IMPLEMENTED+1)){
+  case 1:
+    ballSpeedX[EFFECT_TILL_PADDLE_HIT] += 3.0;
+    //ballSpeedY[EFFECT_TILL_POINT] += random(-127,127)*0.2/255.0;
+    break;
+
+  case 2:
+    ballSpeedY[EFFECT_TILL_PADDLE_HIT] += 3.0;
+    break;
+
+  case 3:
+    ballSpeedY[EFFECT_TILL_PADDLE_HIT] -= 3.0;
+    break;
+    
+  case 4:
+    paddleHeight[player] *= 1.6;
+    break;
+
+  default:
+    // make the other player's paddle smaller
+    paddleHeight[player == 0 ? 1 : 0] *= 0.5;
+    break;
+  
+  }
+}
+
+void resetItems(const byte player)
+{
+  paddleHeight[PLAYER_A] = PADDLE_HEIGHT;
+  paddleHeight[PLAYER_B] = PADDLE_HEIGHT;
 }
 
 /*

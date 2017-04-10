@@ -286,12 +286,19 @@ void calculateMovement()
   //score points if ball hits wall behind paddle
   if (ballX >= SCREEN_WIDTH - BALL_SIZE) {
     scoreA++;
-    ballX = SCREEN_WIDTH / 4;
     soundPoint();
+
+    // put Ball back in game
+    ballX = SCREEN_WIDTH / 4 * 3;
+    ballSpeedXSign *= -1;
+    
   } else if(ballX <= 0) {
     scoreB++;
-    ballX = SCREEN_WIDTH / 4 * 3;
     soundPoint();
+
+    ballX = SCREEN_WIDTH / 4;
+    ballSpeedXSign *= -1;
+
   }
 
   //set last paddle locations

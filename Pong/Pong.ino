@@ -349,6 +349,10 @@ void draw()
   display.print(hitCounter);
   display.setCursor(0,9);
   display.print(ballSpeedX);
+  display.setCursor(0,9*2);
+  display.print(ballSpeedY);
+  display.setCursor(0,9*3);
+  display.print(signum(ballSpeedY));
 #endif
   
   display.display();

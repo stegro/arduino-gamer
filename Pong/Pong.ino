@@ -403,7 +403,9 @@ void calculateMovement()
     soundPoint();
 
     // put Ball back in game
-    ballX = SCREEN_WIDTH / 4 * 3;
+#define RELAUNCH_MARGIN (SCREEN_HEIGHT / 5)
+    ballX = SCREEN_WIDTH-PADDLE_PADDING-PADDLE_WIDTH;
+    ballY = random(RELAUNCH_MARGIN, SCREEN_HEIGHT - RELAUNCH_MARGIN);
     reverseVelocity(ballSpeedX,N_CONTRIBUTIONS);
     
   } else if(ballX <= 0) {
@@ -413,6 +415,8 @@ void calculateMovement()
     soundPoint();
 
     ballX = SCREEN_WIDTH / 4;
+    ballX = PADDLE_PADDING+PADDLE_WIDTH;
+    ballY = random(RELAUNCH_MARGIN, SCREEN_HEIGHT - RELAUNCH_MARGIN);
     reverseVelocity(ballSpeedX,N_CONTRIBUTIONS);
 
   }

@@ -60,7 +60,8 @@
 // ----------------------------------------------
 // uncomment 1 header to automatically load mesh
 //#include "mesh_cube.h"
-#include "mesh_cone.h"
+//#include "mesh_cone.h"
+#include "glider.h"
 //#include "mesh_sphere.h"
 //#include "mesh_torus.h"
 //#include "mesh_monkey.h"
@@ -149,9 +150,17 @@ static double last_btn;                      // used for checking when the butto
 static unsigned char draw_type = 1;          // 0 - vertex | 1 - wireframe | 2 - flat colors | ...
 
 // ----------------------------------------------
+// functions
+// ----------------------------------------------
+// fixed point multiplication
+inline long pMultiply(const long x, const long y) {
+  return ( (x * y) + PROUNDBIT) >> PSHIFT;
+}
+// ----------------------------------------------
 // SIN/COS from 90 degrees LUT
 // ----------------------------------------------
 long SIN(unsigned int angle) {
+  angle = angle % 360;
   angle += 90;
   if (angle > 450) return LUT(0);
   if (angle > 360 && angle < 451) return -LUT(angle-360);
@@ -160,7 +169,8 @@ long SIN(unsigned int angle) {
   return LUT(180-angle);
 }
 
-long COS(const unsigned int angle) {
+long COS(unsigned int angle) {
+  angle = angle % 360;
   if (angle > 360) return LUT(0);
   if (angle > 270 && angle < 361) return  LUT(360-angle);
   if (angle > 180 && angle < 271) return -LUT(angle-180);
@@ -171,15 +181,29 @@ long COS(const unsigned int angle) {
 // ----------------------------------------------
 // Matrix operation
 // ----------------------------------------------
-Matrix4 mMultiply(const Matrix4 &mat1, const Matrix4 &mat2) {
+/* Matrix4 mMultiply(const Matrix4 &mat1, const Matrix4 &mat2) { */
+/*   Matrix4 mat; */
+/*   unsigned char r,c; */
+/*   for (c=0; c<4; c++) */
+/*     for (r=0; r<4; r++) */
+/*       mat.m[c][r] = pMultiply(mat1.m[0][r], mat2.m[c][0]) + */
+/*                     pMultiply(mat1.m[1][r], mat2.m[c][1]) + */
+/*                     pMultiply(mat1.m[2][r], mat2.m[c][2]) + */
+/*                     pMultiply(mat1.m[3][r], mat2.m[c][3]); */
+/*   return mat; */
+/* } */
+
+Matrix4 mAddTranslation(const Matrix4 &mat1, const Matrix4 &mattransl) {
   Matrix4 mat;
   unsigned char r,c;
-  for (c=0; c<4; c++)
-    for (r=0; r<4; r++)
-      mat.m[c][r] = pMultiply(mat1.m[0][r], mat2.m[c][0]) +
-                    pMultiply(mat1.m[1][r], mat2.m[c][1]) +
-                    pMultiply(mat1.m[2][r], mat2.m[c][2]) +
-                    pMultiply(mat1.m[3][r], mat2.m[c][3]);
+  /* for (c=0; c<4; c++) */
+  /*   for (r=0; r<4; r++) */
+  /*     mat.m[c][r] = (mat1.m[c][r]+mat2.m[c][r]); */
+  mat = mat1;
+  c = 3;
+  for (r=0; r<3; r++)
+    mat.m[c][r] = mattransl.m[c][r];
+  
   return mat;
 }
 
@@ -212,6 +236,10 @@ Matrix4 mRotateZ(const unsigned int angle) {
 
 Matrix4 mTranslate(const long x, const long y, const long z) {
   Matrix4 mat;
+  /* mat.m[0][0] = 0; */
+  /* mat.m[1][1] = 0; */
+  /* mat.m[2][2] = 0; */
+  //  mat.m[3][3] = 0;
   mat.m[3][0] =  x << PSHIFT;
   mat.m[3][1] =  y << PSHIFT;
   mat.m[3][2] =  z << PSHIFT;
@@ -223,6 +251,37 @@ Matrix4 mScale(const float ratio) {
   mat.m[0][0] *= ratio;
   mat.m[1][1] *= ratio;
   mat.m[2][2] *= ratio;
+  return mat;
+}
+
+Matrix4 mEulerRotation(const unsigned int alpha, const unsigned int beta, const unsigned int gamma, const float scale) {
+  Matrix4 mat;
+  // first index is the column, second index is the row
+  // element 1,1
+  mat.m[0][0] = pMultiply(COS(alpha),COS(gamma))-pMultiply(SIN(alpha),pMultiply(COS(beta),SIN(gamma)));
+  // element 1,2
+  mat.m[1][0] = pMultiply(SIN(alpha),COS(gamma))+pMultiply(COS(alpha),pMultiply(COS(beta),SIN(gamma)));
+  // element 1,3
+  mat.m[2][0] = pMultiply(SIN(beta),SIN(gamma));
+
+  // element 2,1
+  mat.m[0][1] = -pMultiply(COS(alpha),SIN(gamma))-pMultiply(SIN(alpha),pMultiply(COS(beta),COS(gamma)));
+  // element 2,2
+  mat.m[1][1] = -pMultiply(SIN(alpha),SIN(gamma))+pMultiply(COS(alpha),pMultiply(COS(beta),COS(gamma)));
+  // element 2,3
+  mat.m[2][1] = pMultiply(SIN(beta),COS(gamma));
+
+  // element 3,1
+  mat.m[0][2] = pMultiply(SIN(alpha),SIN(beta));
+  // element 3,2
+  mat.m[1][2] = -pMultiply(COS(alpha),SIN(beta));
+  // element 3,3
+  mat.m[2][2] = COS(beta);
+
+  mat.m[0][0] *= scale;
+  mat.m[1][1] *= scale;
+  mat.m[2][2] *= scale;
+
   return mat;
 }
 
@@ -310,39 +369,6 @@ void clear_dirty(const int (*n)[2]) {
   /* display.spi_end(); */
 }
 
-// ----------------------------------------------
-// write current drawing mode in corner of screen
-// ----------------------------------------------
-void draw_print(const int16_t color) {
-  display.setCursor(0, 2);
-  display.setTextColor(color);
-  display.setTextSize(0);
-  switch(draw_type) {
-    case 0: display.println(F(" vertex"));
-            display.print(F(" count: "));
-            display.print(NODECOUNT);
-            break;
-    default: display.println(F(" wireframe"));
-            display.print(F(" triangles: "));
-            display.println(TRICOUNT);
-            break;
-    /* case 2: display.println(F(" flat color")); */
-    /*         display.println(F(" mask clear")); */
-    /*         display.print(F(" triangles: ")); */
-    /*         display.println(TRICOUNT); */
-    /*         break; */
-    /* case 3: display.println(F(" flat color")); */
-    /*         display.println(F(" wireframe clear")); */
-    /*         display.print(F(" triangles: ")); */
-    /*         display.println(TRICOUNT); */
-    /*         break; */
-    /* case 4: display.println(F(" flat color")); */
-    /*         display.println(F(" no clearscreen")); */
-    /*         display.print(F(" triangles: ")); */
-    /*         display.println(TRICOUNT); */
-    /*         break; */
-  }
-}
 
 // ----------------------------------------------
 // setup
@@ -368,8 +394,6 @@ void setup() {
   /* // initialize screen */
   /* display.begin(); */
   /* display.fillScreen(COLOR0); */
-  /* // print draw type on screen */
-  /* draw_print(COLOR1); */
   /* // init tick */
   /* next_tick = last_btn = millis(); */
 }
@@ -396,14 +420,15 @@ void splash()
   }
 
   soundArpeggioUp();
-
+  display.clearDisplay();
+  display.display();
 }
 
 // ----------------------------------------------
 // main loop
 // ----------------------------------------------
 void loop() {
-  display.clearDisplay(); 
+  //display.clearDisplay(); 
   loops = 0;
   while( millis() > next_tick && loops < MAX_FRAMESKIP) {
     // ===============
@@ -416,18 +441,25 @@ void loop() {
     /*   // change draw type */
     /*   draw_type++; */
     /*   if (draw_type > NUMTYPES) draw_type = 0; */
-    /*   // print draw type on screen */
-    /*   draw_print(COLOR1); */
     /*   // update last button push */
     /*   last_btn = millis(); */
     /* } */
 
     /* // rotation */
-    m_world = mRotateX(mesh_rotation.x);
+    /* m_world = mRotateX(mesh_rotation.x); */
     /* m_world = mMultiply(mRotateY(mesh_rotation.y), m_world); */
     /* m_world = mMultiply(mRotateZ(mesh_rotation.z), m_world); */
+    Matrix4 m = mEulerRotation(mesh_rotation.x,mesh_rotation.y,mesh_rotation.z, 1.0);
+    //m_world = mEulerRotation(mesh_rotation.x,1.0,1.0, 1.0);
+    //m_world = mEulerRotation(1.0,mesh_rotation.y,1.0, 1.0);
+    //m_world = mEulerRotation(1.0,1.0,mesh_rotation.z, 1.0);
     /* // scaling */
-    m_world = mMultiply(mScale(1.5), m_world);
+    //m_world = mMultiply(mScale(1.5), m_world);
+    Matrix4 m2 = mTranslate(0,analogRead(CONTROL_A),analogRead(CONTROL_B));
+    //Matrix4 m2 = mTranslate(0,0,0);
+    m_world = mAddTranslation(m, m2);
+    //m_world = m;
+    //m_world = m2;
 
     // project nodes with world matrix
     Vector3i p;
@@ -486,10 +518,13 @@ void loop() {
       case 0: draw_vertex(old_nodes, COLOR0);
               draw_vertex(proj_nodes, COLOR1);
               break;
-      default: if (TRICOUNT > 32) clear_dirty(old_nodes);
-              else draw_wireframe(old_nodes, COLOR0);
-              draw_wireframe(proj_nodes, COLOR1);
-              break;
+      default:
+	if (TRICOUNT > 32 && false)
+	  clear_dirty(old_nodes);
+	else
+	  draw_wireframe(old_nodes, COLOR0);
+	draw_wireframe(proj_nodes, COLOR1);
+	break;
     }
     // copy projected nodes to old_nodes to check if we need to redraw next frame
     memcpy(old_nodes, proj_nodes, sizeof(proj_nodes));

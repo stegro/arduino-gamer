@@ -4,7 +4,8 @@
 // ----------------------------------------------
 // defines
 // ----------------------------------------------
-#define PRES             16384
+// PRES is 2**14
+#define PRES             (1<<14)
 #define PSHIFT           14
 #define PROUNDBIT        (1 << (PSHIFT-1))
 
@@ -25,16 +26,8 @@ typedef struct {
       {PRES,    0,    0,    0},
       {   0, PRES,    0,    0},
       {   0,    0, PRES,    0},
-      {   0,    0,    0, PRES}
+      {   0,    0,    0,    PRES}
   };
 } Matrix4;
-
-// ----------------------------------------------
-// functions
-// ----------------------------------------------
-// fixed point multiplication
-static long pMultiply(long x, long y) {
-  return ( (x * y) + PROUNDBIT) >> PSHIFT;
-}
 
 #endif // TYPE_H
